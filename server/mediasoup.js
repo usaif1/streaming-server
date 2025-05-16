@@ -73,6 +73,57 @@ function getRoom(roomId) {
   return room;
 }
 
+async function closeRoom(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    console.log(`[Mediasoup] Room not found for closure: ${roomId}`);
+    return;
+  }
+
+  console.log(`[Mediasoup] Closing room: ${roomId}`);
+
+  // Close all consumers
+  for (const consumer of room.consumers.values()) {
+    try {
+      await consumer.close();
+    } catch (err) {
+      console.error(`[Mediasoup] Error closing consumer: ${err}`);
+    }
+  }
+  room.consumers.clear();
+
+  // Close all producers
+  for (const producer of room.producers.values()) {
+    try {
+      await producer.close();
+    } catch (err) {
+      console.error(`[Mediasoup] Error closing producer: ${err}`);
+    }
+  }
+  room.producers.clear();
+
+  // Close all transports
+  for (const transport of room.transports.values()) {
+    try {
+      await transport.close();
+    } catch (err) {
+      console.error(`[Mediasoup] Error closing transport: ${err}`);
+    }
+  }
+  room.transports.clear();
+
+  // Close the router
+  try {
+    await room.router.close();
+  } catch (err) {
+    console.error(`[Mediasoup] Error closing router: ${err}`);
+  }
+
+  // Remove the room
+  rooms.delete(roomId);
+  console.log(`[Mediasoup] Room closed: ${roomId}`);
+}
+
 module.exports = {
   startMediasoup,
   getRouterRtpCapabilities,
@@ -80,4 +131,5 @@ module.exports = {
   getRoom,
   getOrCreateRoom,
   createWebRtcTransport,
+  closeRoom,
 };

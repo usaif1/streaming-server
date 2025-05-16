@@ -2,8 +2,12 @@ const {
   getRouterRtpCapabilities,
   createWebRtcTransport,
   getRoom,
-  getOrCreateRoom
+  getOrCreateRoom,
+  closeRoom
 } = require("./mediasoup");
+
+// Keep track of all connected clients for each room
+const roomClients = new Map();
 
 module.exports = function registerSignalingHandlers(ws) {
   ws.on("message", async (msg) => {
@@ -24,6 +28,12 @@ module.exports = function registerSignalingHandlers(ws) {
       }));
       return;
     }
+
+    // Add client to room
+    if (!roomClients.has(roomId)) {
+      roomClients.set(roomId, new Set());
+    }
+    roomClients.get(roomId).add(ws);
 
     switch (data.type) {
       case "get-rtp-capabilities": {
@@ -152,8 +162,38 @@ module.exports = function registerSignalingHandlers(ws) {
         break;
       }
 
+      case "close-room": {
+        // Notify all viewers in the room
+        const clients = roomClients.get(roomId);
+        if (clients) {
+          for (const client of clients) {
+            if (client !== ws) { // Don't send to the streamer
+              client.send(JSON.stringify({
+                type: "stream-stopped"
+              }));
+            }
+          }
+        }
+        
+        // Close the room
+        await closeRoom(roomId);
+        roomClients.delete(roomId);
+        break;
+      }
+
       default:
         console.warn("[Signaling] Unknown message type:", data.type);
+    }
+  });
+
+  // Handle client disconnection
+  ws.on("close", () => {
+    // Remove client from all rooms
+    for (const [roomId, clients] of roomClients.entries()) {
+      clients.delete(ws);
+      if (clients.size === 0) {
+        roomClients.delete(roomId);
+      }
     }
   });
 };
