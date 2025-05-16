@@ -13,6 +13,8 @@ const props = defineProps({
   }
 });
 
+const emit = defineEmits(['go-home', 'stream-stopped']);
+
 const videoElement = ref(null);
 let ws = null;
 let sendTransport = null;
@@ -78,6 +80,24 @@ async function initializeStreamer() {
   }
 }
 
+async function stopStream() {
+  try {
+    // Notify server to close the room
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'close-room',
+        roomId: props.streamId
+      }));
+    }
+    
+    await cleanup();
+    emit('stream-stopped');
+    emit('go-home');
+  } catch (err) {
+    console.error('[Streamer] Error stopping stream:', err);
+  }
+}
+
 async function cleanup() {
   if (producers.size > 0) {
     for (const producer of producers) {
@@ -120,15 +140,48 @@ onBeforeUnmount(async () => {
 </script>
 
 <template>
-  <div>
+  <div class="streamer-container">
     <h2>Streamer - Room: {{ streamId }}</h2>
     <video ref="videoElement" autoplay muted playsinline style="width: 100%" />
+    <div class="button-group">
+      <button class="btn stop-btn" @click="stopStream">Stop Stream</button>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.streamer-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 video {
   border-radius: 10px;
   border: 2px solid #ccc;
+}
+
+.button-group {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+
+.stop-btn {
+  background-color: #dc3545;
+  color: white;
+}
+
+.stop-btn:hover {
+  background-color: #c82333;
 }
 </style>

@@ -13,6 +13,8 @@ const props = defineProps({
   }
 });
 
+const emit = defineEmits(['go-home']);
+
 const videoElement = ref(null);
 let ws = null;
 let consumerTransport = null;
@@ -86,6 +88,11 @@ async function initializeViewer() {
     if (data.type === 'error') {
       console.error('[Viewer] Server error:', data.error);
     }
+
+    if (data.type === 'stream-stopped') {
+      alert('The stream was stopped');
+      await exitRoom();
+    }
   });
 
   ws.addEventListener('error', (err) => {
@@ -95,6 +102,15 @@ async function initializeViewer() {
   ws.addEventListener('close', () => {
     console.log('[Viewer] WebSocket closed');
   });
+}
+
+async function exitRoom() {
+  try {
+    await cleanup();
+    emit('go-home');
+  } catch (err) {
+    console.error('[Viewer] Error exiting room:', err);
+  }
 }
 
 async function cleanup() {
@@ -139,15 +155,48 @@ onBeforeUnmount(async () => {
 </script>
 
 <template>
-  <div>
+  <div class="viewer-container">
     <h2>Viewer - Room: {{ streamId }}</h2>
     <video ref="videoElement" autoplay playsinline controls style="width: 100%" />
+    <div class="button-group">
+      <button class="btn exit-btn" @click="exitRoom">Exit Room</button>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.viewer-container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
 video {
   border-radius: 10px;
   border: 2px solid #ccc;
+}
+
+.button-group {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+
+.exit-btn {
+  background-color: #6c757d;
+  color: white;
+}
+
+.exit-btn:hover {
+  background-color: #5a6268;
 }
 </style>
