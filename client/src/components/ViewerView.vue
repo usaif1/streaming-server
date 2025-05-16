@@ -15,12 +15,19 @@ const props = defineProps({
 
 const videoElement = ref(null);
 let ws = null;
-let consumerTransport;
-let mediaStream;
+let consumerTransport = null;
+let mediaStream = null;
+let consumers = new Set();
 
 onMounted(async () => {
-  ws = new WebSocket('ws://localhost:3000/ws');
+  await initializeViewer();
+});
 
+async function initializeViewer() {
+  // Cleanup any existing resources
+  await cleanup();
+
+  ws = new WebSocket('ws://localhost:3000/ws');
   console.log('[Viewer] Mounting and opening WebSocket...');
 
   ws.addEventListener('open', () => {
@@ -59,6 +66,8 @@ onMounted(async () => {
         rtpParameters: data.rtpParameters
       });
 
+      consumers.add(consumer);
+
       if (!mediaStream) {
         mediaStream = new MediaStream();
         videoElement.value.srcObject = mediaStream;
@@ -86,22 +95,46 @@ onMounted(async () => {
   ws.addEventListener('close', () => {
     console.log('[Viewer] WebSocket closed');
   });
-});
+}
 
-onBeforeUnmount(() => {
-  if (ws) {
-    ws.close();
-    ws = null;
+async function cleanup() {
+  if (consumers.size > 0) {
+    for (const consumer of consumers) {
+      try {
+        await consumer.close();
+      } catch (err) {
+        console.error('[Viewer] Error closing consumer:', err);
+      }
+    }
+    consumers.clear();
+  }
+
+  if (consumerTransport) {
+    try {
+      await consumerTransport.close();
+    } catch (err) {
+      console.error('[Viewer] Error closing transport:', err);
+    }
+    consumerTransport = null;
+  }
+
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(track => track.stop());
+    mediaStream = null;
   }
 
   if (videoElement.value) {
     videoElement.value.srcObject = null;
   }
 
-  if (mediaStream) {
-    mediaStream.getTracks().forEach((track) => track.stop());
-    mediaStream = null;
+  if (ws) {
+    ws.close();
+    ws = null;
   }
+}
+
+onBeforeUnmount(async () => {
+  await cleanup();
 });
 </script>
 
