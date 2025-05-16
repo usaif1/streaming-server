@@ -1,9 +1,7 @@
 const mediasoup = require("mediasoup");
 
-let worker, router;
-let transports = new Map();
-let producers = new Map();
-let consumers = new Map();
+let worker;
+let rooms = new Map(); // Map to store room-specific routers and their associated transports/producers/consumers
 
 const mediaCodecs = [
   {
@@ -21,22 +19,40 @@ const mediaCodecs = [
 
 async function startMediasoup() {
   worker = await mediasoup.createWorker();
-  router = await worker.createRouter({ mediaCodecs });
-
-  return { router };
+  return { worker };
 }
 
-function getRouterRtpCapabilities() {
-  return router.rtpCapabilities;
+async function getOrCreateRoom(roomId) {
+  if (!rooms.has(roomId)) {
+    console.log(`[Mediasoup] Creating new room: ${roomId}`);
+    const router = await worker.createRouter({ mediaCodecs });
+    rooms.set(roomId, {
+      router,
+      transports: new Map(),
+      producers: new Map(),
+      consumers: new Map()
+    });
+  }
+  return rooms.get(roomId);
 }
 
-async function createWebRtcTransport() {
-  const transport = await router.createWebRtcTransport({
+function getRouterRtpCapabilities(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) return null;
+  return room.router.rtpCapabilities;
+}
+
+async function createWebRtcTransport(roomId) {
+  const room = await getOrCreateRoom(roomId);
+  const transport = await room.router.createWebRtcTransport({
     listenIps: [{ ip: "127.0.0.1", announcedIp: null }],
     enableUdp: true,
     enableTcp: true,
     preferUdp: true,
   });
+
+  room.transports.set(transport.id, transport);
+  console.log(`[Mediasoup] Created transport ${transport.id} for room ${roomId}`);
 
   return {
     transport,
@@ -49,13 +65,19 @@ async function createWebRtcTransport() {
   };
 }
 
+function getRoom(roomId) {
+  const room = rooms.get(roomId);
+  if (!room) {
+    console.log(`[Mediasoup] Room not found: ${roomId}`);
+  }
+  return room;
+}
+
 module.exports = {
   startMediasoup,
   getRouterRtpCapabilities,
   worker: () => worker,
-  router: () => router,
-  transports,
-  producers,
-  consumers,
+  getRoom,
+  getOrCreateRoom,
   createWebRtcTransport,
 };

@@ -5,19 +5,31 @@ import ViewerView from './components/ViewerView.vue';
 
 const mode = ref('home'); // 'home' | 'streamer' | 'viewer'
 const error = ref('');
-const streamId = ref(Date.now().toString());
+const streamId = ref('');
+const customRoomId = ref('');
 
 function goHome() {
   mode.value = 'home';
   error.value = '';
+  streamId.value = '';
+  customRoomId.value = '';
 }
 
 function startStream() {
-  streamId.value = Date.now().toString();
+  if (!customRoomId.value) {
+    error.value = 'Please enter a room ID';
+    return;
+  }
+  streamId.value = customRoomId.value;
   mode.value = 'streamer';
 }
 
 function joinStream() {
+  if (!customRoomId.value) {
+    error.value = 'Please enter a room ID';
+    return;
+  }
+  streamId.value = customRoomId.value;
   mode.value = 'viewer';
 }
 </script>
@@ -27,8 +39,18 @@ function joinStream() {
     <h1>🛸 Live Streaming App (mediasoup)</h1>
 
     <div v-if="mode === 'home'" class="menu">
-      <button class="btn" @click="startStream">Start Streaming</button>
-      <button class="btn" @click="joinStream">Join Stream</button>
+      <div class="room-input">
+        <input 
+          v-model="customRoomId"
+          type="text"
+          placeholder="Enter Room ID"
+          class="room-input-field"
+        />
+      </div>
+      <div class="button-group">
+        <button class="btn" @click="startStream">Start Streaming</button>
+        <button class="btn" @click="joinStream">Join Stream</button>
+      </div>
     </div>
 
     <StreamerView
@@ -57,9 +79,30 @@ function joinStream() {
 }
 .menu {
   display: flex;
-  justify-content: center;
-  gap: 1rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.5rem;
   margin-top: 2rem;
+}
+.button-group {
+  display: flex;
+  gap: 1rem;
+}
+.room-input {
+  width: 100%;
+  max-width: 300px;
+}
+.room-input-field {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  text-align: center;
+}
+.room-input-field:focus {
+  outline: none;
+  border-color: #1e88e5;
 }
 .btn {
   padding: 0.75rem 1.5rem;

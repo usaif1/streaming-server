@@ -6,12 +6,18 @@ import {
   getDevice
 } from '../lib/mediasoupClient';
 
+const props = defineProps({
+  streamId: {
+    type: String,
+    required: true
+  }
+});
+
 const videoElement = ref(null);
 let ws = null;
 
 onMounted(async () => {
   console.log('StreamerView mounted', location.host);
-
 
   const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
   videoElement.value.srcObject = stream;
@@ -20,7 +26,10 @@ onMounted(async () => {
 
   ws.addEventListener('open', () => {
     console.log('[Streamer] WebSocket connected');
-    ws.send(JSON.stringify({ type: 'get-rtp-capabilities' }));
+    ws.send(JSON.stringify({ 
+      type: 'get-rtp-capabilities',
+      roomId: props.streamId 
+    }));
   });
 
   ws.addEventListener('message', async (event) => {
@@ -34,7 +43,7 @@ onMounted(async () => {
         console.log('[Streamer] Send Transport Connected');
       }, (producerId) => {
         console.log('[Streamer] Track Produced, id:', producerId);
-      });
+      }, props.streamId);
 
       console.log('[Streamer] Creating Producers...');
       for (const track of stream.getTracks()) {
@@ -56,7 +65,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div>
-    <h2>Streamer</h2>
+    <h2>Streamer - Room: {{ streamId }}</h2>
     <video ref="videoElement" autoplay muted playsinline style="width: 100%" />
   </div>
 </template>

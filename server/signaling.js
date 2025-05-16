@@ -1,10 +1,8 @@
 const {
   getRouterRtpCapabilities,
   createWebRtcTransport,
-  transports,
-  producers,
-  consumers,
-  router: getRouter, // ✅ router accessor
+  getRoom,
+  getOrCreateRoom
 } = require("./mediasoup");
 
 module.exports = function registerSignalingHandlers(ws) {
@@ -17,9 +15,21 @@ module.exports = function registerSignalingHandlers(ws) {
       return;
     }
 
+    const roomId = data.roomId;
+    if (!roomId) {
+      console.error("[Signaling] No roomId provided");
+      ws.send(JSON.stringify({
+        type: "error",
+        error: "No room ID provided"
+      }));
+      return;
+    }
+
     switch (data.type) {
       case "get-rtp-capabilities": {
-        const rtpCapabilities = getRouterRtpCapabilities();
+        // Create room if it doesn't exist
+        const room = await getOrCreateRoom(roomId);
+        const rtpCapabilities = room.router.rtpCapabilities;
         ws.send(
           JSON.stringify({
             type: "rtp-capabilities",
@@ -30,8 +40,7 @@ module.exports = function registerSignalingHandlers(ws) {
       }
 
       case "create-transport": {
-        const { transport, params } = await createWebRtcTransport();
-        transports.set(params.id, transport);
+        const { transport, params } = await createWebRtcTransport(roomId);
         ws.send(
           JSON.stringify({
             type: "transport-created",
@@ -42,25 +51,48 @@ module.exports = function registerSignalingHandlers(ws) {
       }
 
       case "connect-transport": {
-        const transport = transports.get(data.transportId);
-        if (!transport)
-          return console.warn(
-            "[Signaling] Transport not found:",
-            data.transportId
-          );
+        const room = getRoom(roomId);
+        if (!room) {
+          ws.send(JSON.stringify({
+            type: "error",
+            error: "Room not found"
+          }));
+          return;
+        }
+        const transport = room.transports.get(data.transportId);
+        if (!transport) {
+          ws.send(JSON.stringify({
+            type: "error",
+            error: "Transport not found"
+          }));
+          return;
+        }
         await transport.connect({ dtlsParameters: data.dtlsParameters });
         break;
       }
 
       case "produce": {
-        const transport = transports.get(data.transportId);
-        if (!transport)
-          return console.warn("[Signaling] Transport not found for produce");
+        const room = getRoom(roomId);
+        if (!room) {
+          ws.send(JSON.stringify({
+            type: "error",
+            error: "Room not found"
+          }));
+          return;
+        }
+        const transport = room.transports.get(data.transportId);
+        if (!transport) {
+          ws.send(JSON.stringify({
+            type: "error",
+            error: "Transport not found"
+          }));
+          return;
+        }
         const producer = await transport.produce({
           kind: data.kind,
           rtpParameters: data.rtpParameters,
         });
-        producers.set(producer.id, producer);
+        room.producers.set(producer.id, producer);
         ws.send(
           JSON.stringify({
             type: "produced",
@@ -71,14 +103,26 @@ module.exports = function registerSignalingHandlers(ws) {
       }
 
       case "consume": {
-        const transport = transports.get(data.transportId);
-        const router = getRouter();
-        if (!transport || !router)
-          return console.warn("[Signaling] Invalid transport or router");
+        const room = getRoom(roomId);
+        if (!room) {
+          ws.send(JSON.stringify({
+            type: "error",
+            error: "Room not found"
+          }));
+          return;
+        }
+        const transport = room.transports.get(data.transportId);
+        if (!transport) {
+          ws.send(JSON.stringify({
+            type: "error",
+            error: "Transport not found"
+          }));
+          return;
+        }
 
-        for (const producer of producers.values()) {
+        for (const producer of room.producers.values()) {
           if (
-            !router.canConsume({
+            !room.router.canConsume({
               producerId: producer.id,
               rtpCapabilities: data.rtpCapabilities,
             })
@@ -93,7 +137,7 @@ module.exports = function registerSignalingHandlers(ws) {
             paused: false,
           });
 
-          consumers.set(consumer.id, consumer);
+          room.consumers.set(consumer.id, consumer);
 
           ws.send(
             JSON.stringify({

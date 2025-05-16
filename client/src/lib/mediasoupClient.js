@@ -14,9 +14,12 @@ export function getDevice() {
   return device;
 }
 
-export async function createSendTransport(ws, onConnect, onProduce) {
+export async function createSendTransport(ws, onConnect, onProduce, roomId) {
   return new Promise((resolve) => {
-    ws.send(JSON.stringify({ type: "create-transport" }));
+    ws.send(JSON.stringify({ 
+      type: "create-transport",
+      roomId 
+    }));
     ws.onmessage = async (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "transport-created") {
@@ -30,6 +33,7 @@ export async function createSendTransport(ws, onConnect, onProduce) {
                 type: "connect-transport",
                 transportId: sendTransport.id,
                 dtlsParameters,
+                roomId
               })
             );
             callback();
@@ -46,6 +50,7 @@ export async function createSendTransport(ws, onConnect, onProduce) {
                 transportId: sendTransport.id,
                 kind,
                 rtpParameters,
+                roomId
               })
             );
             ws.onmessage = (event) => {
@@ -64,9 +69,12 @@ export async function createSendTransport(ws, onConnect, onProduce) {
   });
 }
 
-export async function createRecvTransport(ws, rtpCapabilities) {
+export async function createRecvTransport(ws, rtpCapabilities, roomId) {
   return new Promise((resolve) => {
-    ws.send(JSON.stringify({ type: "create-transport" }));
+    ws.send(JSON.stringify({ 
+      type: "create-transport",
+      roomId 
+    }));
     ws.onmessage = async (event) => {
       const data = JSON.parse(event.data);
       if (data.type === "transport-created") {
@@ -78,6 +86,7 @@ export async function createRecvTransport(ws, rtpCapabilities) {
               type: "connect-transport",
               transportId: recvTransport.id,
               dtlsParameters,
+              roomId
             })
           );
           callback();

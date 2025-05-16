@@ -6,6 +6,13 @@ import {
   getDevice
 } from '../lib/mediasoupClient';
 
+const props = defineProps({
+  streamId: {
+    type: String,
+    required: true
+  }
+});
+
 const videoElement = ref(null);
 let ws = null;
 let consumerTransport;
@@ -18,7 +25,10 @@ onMounted(async () => {
 
   ws.addEventListener('open', () => {
     console.log('[Viewer] WebSocket connected');
-    ws.send(JSON.stringify({ type: 'get-rtp-capabilities' }));
+    ws.send(JSON.stringify({ 
+      type: 'get-rtp-capabilities',
+      roomId: props.streamId 
+    }));
   });
 
   ws.addEventListener('message', async (event) => {
@@ -28,13 +38,14 @@ onMounted(async () => {
       console.log('[Viewer] Got RTP Capabilities');
       await loadDevice(data.rtpCapabilities);
 
-      consumerTransport = await createRecvTransport(ws, getDevice().rtpCapabilities);
+      consumerTransport = await createRecvTransport(ws, getDevice().rtpCapabilities, props.streamId);
       console.log('[Viewer] Recv transport created:', consumerTransport.id);
 
       ws.send(JSON.stringify({
         type: 'consume',
         transportId: consumerTransport.id,
-        rtpCapabilities: getDevice().rtpCapabilities
+        rtpCapabilities: getDevice().rtpCapabilities,
+        roomId: props.streamId
       }));
     }
 
@@ -61,6 +72,10 @@ onMounted(async () => {
       } catch (err) {
         console.error('[Viewer] Error playing stream:', err);
       }
+    }
+
+    if (data.type === 'error') {
+      console.error('[Viewer] Server error:', data.error);
     }
   });
 
@@ -92,7 +107,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div>
-    <h2>Viewer</h2>
+    <h2>Viewer - Room: {{ streamId }}</h2>
     <video ref="videoElement" autoplay playsinline controls style="width: 100%" />
   </div>
 </template>
